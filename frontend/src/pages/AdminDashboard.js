@@ -69,18 +69,20 @@ export const AdminDashboard = () => {
 
   const fetchAllData = async () => {
     try {
-      const [analyticsRes, restaurantsRes, ordersRes, usersRes, driversRes] = await Promise.all([
+      const [analyticsRes, restaurantsRes, ordersRes, usersRes, driversRes, menuItemsRes] = await Promise.all([
         axios.get(`${BACKEND_URL}/api/admin/analytics`, { withCredentials: true }),
         axios.get(`${BACKEND_URL}/api/admin/restaurants`, { withCredentials: true }),
         axios.get(`${BACKEND_URL}/api/admin/orders`, { withCredentials: true }),
         axios.get(`${BACKEND_URL}/api/admin/users`, { withCredentials: true }),
         axios.get(`${BACKEND_URL}/api/drivers`, { withCredentials: true }),
+        axios.get(`${BACKEND_URL}/api/admin/menu-items`, { withCredentials: true }),
       ]);
       setAnalytics(analyticsRes.data);
       setRestaurants(restaurantsRes.data);
       setOrders(ordersRes.data);
       setUsers(usersRes.data);
       setDrivers(driversRes.data);
+      setMenuItems(menuItemsRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
     }

@@ -34,6 +34,8 @@ export const AdminDashboard = () => {
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState('');
   const [restaurantForm, setRestaurantForm] = useState({
     name: '',
     description: '',
@@ -42,8 +44,18 @@ export const AdminDashboard = () => {
     delivery_time: '',
     min_order: 0,
   });
+  const [menuItemForm, setMenuItemForm] = useState({
+    restaurant_id: '',
+    name: '',
+    description: '',
+    price: 0,
+    image: '',
+    category: '',
+  });
   const [editingRestaurant, setEditingRestaurant] = useState(null);
+  const [editingMenuItem, setEditingMenuItem] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [menuDialogOpen, setMenuDialogOpen] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -71,6 +83,18 @@ export const AdminDashboard = () => {
       setDrivers(driversRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
+    }
+  };
+
+  const fetchMenuItems = async (restaurantId = '') => {
+    try {
+      const url = restaurantId 
+        ? `${BACKEND_URL}/api/admin/menu-items?restaurant_id=${restaurantId}`
+        : `${BACKEND_URL}/api/admin/menu-items`;
+      const { data } = await axios.get(url, { withCredentials: true });
+      setMenuItems(data);
+    } catch (error) {
+      console.error('Error fetching menu items:', error);
     }
   };
 
@@ -174,6 +198,92 @@ export const AdminDashboard = () => {
     }
   };
 
+  const handleMenuItemFormChange = (field, value) => {
+    setMenuItemForm({ ...menuItemForm, [field]: value });
+  };
+
+  const resetMenuForm = () => {
+    setMenuItemForm({
+      restaurant_id: '',
+      name: '',
+      description: '',
+      price: 0,
+      image: '',
+      category: '',
+    });
+    setEditingMenuItem(null);
+  };
+
+  const handleAddMenuItem = async () => {
+    try {
+      await axios.post(`${BACKEND_URL}/api/admin/menu-items`, menuItemForm, {
+        withCredentials: true,
+      });
+      toast.success('Menu item added successfully');
+      setMenuDialogOpen(false);
+      resetMenuForm();
+      fetchMenuItems(selectedRestaurant);
+    } catch (error) {
+      toast.error('Failed to add menu item');
+    }
+  };
+
+  const handleUpdateMenuItem = async () => {
+    try {
+      await axios.put(
+        `${BACKEND_URL}/api/admin/menu-items/${editingMenuItem}`,
+        menuItemForm,
+        { withCredentials: true }
+      );
+      toast.success('Menu item updated successfully');
+      setMenuDialogOpen(false);
+      resetMenuForm();
+      fetchMenuItems(selectedRestaurant);
+    } catch (error) {
+      toast.error('Failed to update menu item');
+    }
+  };
+
+  const handleDeleteMenuItem = async (itemId) => {
+    if (!window.confirm('Are you sure you want to delete this menu item?')) return;
+    try {
+      await axios.delete(`${BACKEND_URL}/api/admin/menu-items/${itemId}`, {
+        withCredentials: true,
+      });
+      toast.success('Menu item deleted successfully');
+      fetchMenuItems(selectedRestaurant);
+    } catch (error) {
+      toast.error('Failed to delete menu item');
+    }
+  };
+
+  const handleEditMenuItem = (item) => {
+    setEditingMenuItem(item._id);
+    setMenuItemForm({
+      restaurant_id: item.restaurant_id,
+      name: item.name,
+      description: item.description,
+      price: item.price,
+      image: item.image,
+      category: item.category,
+    });
+    setMenuDialogOpen(true);
+  };
+
+  const handleToggleAvailability = async (itemId, currentStatus) => {
+    try {
+      await axios.put(
+        `${BACKEND_URL}/api/admin/menu-items/${itemId}`,
+        { is_available: !currentStatus },
+        { withCredentials: true }
+      );
+      toast.success('Availability updated');
+      fetchMenuItems(selectedRestaurant);
+    } catch (error) {
+      toast.error('Failed to update availability');
+    }
+  };
+
   if (!user || user.role !== 'admin') {
     return null;
   }
@@ -238,8 +348,9 @@ export const AdminDashboard = () => {
 
         {/* Tabs */}
         <Tabs defaultValue="restaurants" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="restaurants" data-testid="restaurants-tab">Restaurants</TabsTrigger>
+            <TabsTrigger value="menu" data-testid="menu-tab">Menu Items</TabsTrigger>
             <TabsTrigger value="orders" data-testid="orders-tab">Orders</TabsTrigger>
             <TabsTrigger value="users" data-testid="users-tab">Users</TabsTrigger>
           </TabsList>
@@ -389,6 +500,210 @@ export const AdminDashboard = () => {
                 </div>
               ))}
             </div>
+          </TabsContent>
+
+          {/* Menu Items Tab */}
+          <TabsContent value="menu" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-heading font-bold">Manage Menu Items</h2>
+              <Dialog open={menuDialogOpen} onOpenChange={setMenuDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    onClick={() => resetMenuForm()}
+                    className="bg-primary hover:bg-primary/90 text-white"
+                    data-testid="add-menu-item-button"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Menu Item
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingMenuItem ? 'Edit Menu Item' : 'Add New Menu Item'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Restaurant</Label>
+                      <Select
+                        value={menuItemForm.restaurant_id}
+                        onValueChange={(value) => handleMenuItemFormChange('restaurant_id', value)}
+                      >
+                        <SelectTrigger data-testid="menu-restaurant-select">
+                          <SelectValue placeholder="Select Restaurant" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {restaurants.map((restaurant) => (
+                            <SelectItem key={restaurant._id} value={restaurant._id}>
+                              {restaurant.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Item Name</Label>
+                      <Input
+                        value={menuItemForm.name}
+                        onChange={(e) => handleMenuItemFormChange('name', e.target.value)}
+                        placeholder="Cheeseburger"
+                        data-testid="menu-item-name-input"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={menuItemForm.description}
+                        onChange={(e) => handleMenuItemFormChange('description', e.target.value)}
+                        placeholder="Juicy beef patty with cheese..."
+                        data-testid="menu-item-description-input"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Price ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={menuItemForm.price}
+                          onChange={(e) =>
+                            handleMenuItemFormChange('price', parseFloat(e.target.value))
+                          }
+                          placeholder="12.99"
+                          data-testid="menu-item-price-input"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Input
+                          value={menuItemForm.category}
+                          onChange={(e) => handleMenuItemFormChange('category', e.target.value)}
+                          placeholder="Burgers"
+                          data-testid="menu-item-category-input"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Image URL</Label>
+                      <Input
+                        value={menuItemForm.image}
+                        onChange={(e) => handleMenuItemFormChange('image', e.target.value)}
+                        placeholder="https://..."
+                        data-testid="menu-item-image-input"
+                      />
+                    </div>
+                    <Button
+                      onClick={editingMenuItem ? handleUpdateMenuItem : handleAddMenuItem}
+                      className="w-full bg-primary hover:bg-primary/90 text-white"
+                      data-testid="save-menu-item-button"
+                    >
+                      {editingMenuItem ? 'Update Menu Item' : 'Add Menu Item'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Filter by Restaurant */}
+            <div className="flex items-center space-x-4">
+              <Label>Filter by Restaurant:</Label>
+              <Select
+                value={selectedRestaurant}
+                onValueChange={(value) => {
+                  setSelectedRestaurant(value);
+                  fetchMenuItems(value);
+                }}
+              >
+                <SelectTrigger className="w-64" data-testid="filter-restaurant-select">
+                  <SelectValue placeholder="All Restaurants" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Restaurants</SelectItem>
+                  {restaurants.map((restaurant) => (
+                    <SelectItem key={restaurant._id} value={restaurant._id}>
+                      {restaurant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                onClick={() => fetchMenuItems(selectedRestaurant)}
+                data-testid="refresh-menu-items"
+              >
+                Refresh
+              </Button>
+            </div>
+
+            {/* Menu Items Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {menuItems.map((item, index) => (
+                <div
+                  key={item._id}
+                  className="bg-card rounded-lg border border-border overflow-hidden"
+                  data-testid={`menu-item-${index}`}
+                >
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="w-full h-40 object-cover"
+                  />
+                  <div className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-heading font-bold">{item.name}</h3>
+                      <Badge className={item.is_available ? 'bg-success' : 'bg-gray-400'}>
+                        {item.is_available ? 'Available' : 'Unavailable'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                      {item.description}
+                    </p>
+                    <div className="flex items-center justify-between text-sm mb-4">
+                      <span className="font-bold text-primary text-lg">
+                        ${item.price.toFixed(2)}
+                      </span>
+                      <span className="text-muted-foreground">{item.category}</span>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditMenuItem(item)}
+                        className="flex-1"
+                        data-testid={`edit-menu-item-${index}`}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleAvailability(item._id, item.is_available)}
+                        data-testid={`toggle-availability-${index}`}
+                      >
+                        {item.is_available ? 'Hide' : 'Show'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteMenuItem(item._id)}
+                        className="text-destructive hover:text-destructive"
+                        data-testid={`delete-menu-item-${index}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {menuItems.length === 0 && (
+              <div className="text-center py-16 text-muted-foreground">
+                <p>No menu items found. Add your first menu item!</p>
+              </div>
+            )}
           </TabsContent>
 
           {/* Orders Tab */}

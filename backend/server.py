@@ -477,7 +477,9 @@ async def get_restaurants(
     if search:
         query["name"] = {"$regex": search, "$options": "i"}
     
-    restaurants = await db.restaurants.find(query, {"_id": 0}).to_list(100)
+    restaurants = await db.restaurants.find(query).to_list(100)
+    for r in restaurants:
+        r["_id"] = str(r["_id"])
     return restaurants
 
 @api_router.get("/restaurants/{restaurant_id}")
@@ -485,15 +487,18 @@ async def get_restaurant(restaurant_id: str):
     if not ObjectId.is_valid(restaurant_id):
         raise HTTPException(status_code=400, detail="Invalid restaurant ID")
     
-    restaurant = await db.restaurants.find_one({"_id": ObjectId(restaurant_id)}, {"_id": 0})
+    restaurant = await db.restaurants.find_one({"_id": ObjectId(restaurant_id)})
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
     
+    restaurant["_id"] = str(restaurant["_id"])
     return restaurant
 
 @api_router.get("/restaurants/{restaurant_id}/menu")
 async def get_restaurant_menu(restaurant_id: str):
-    menu_items = await db.menu_items.find({"restaurant_id": restaurant_id, "is_available": True}, {"_id": 0}).to_list(100)
+    menu_items = await db.menu_items.find({"restaurant_id": restaurant_id, "is_available": True}).to_list(100)
+    for item in menu_items:
+        item["_id"] = str(item["_id"])
     return menu_items
 
 @api_router.get("/restaurants/{restaurant_id}/reviews")

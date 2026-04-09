@@ -477,7 +477,7 @@ async def get_restaurants(
     if search:
         query["name"] = {"$regex": search, "$options": "i"}
     
-    restaurants = await db.restaurants.find(query).limit(100).to_list(None)
+    restaurants = await db.restaurants.find(query).limit(100).to_list(100)
     for r in restaurants:
         r["_id"] = str(r["_id"])
     return restaurants
@@ -498,7 +498,7 @@ async def get_restaurant(restaurant_id: str):
 async def get_restaurant_menu(restaurant_id: str):
     menu_items = await db.menu_items.find(
         {"restaurant_id": restaurant_id, "is_available": True}
-    ).limit(100).to_list(None)
+    ).limit(100).to_list(100)
     for item in menu_items:
         item["_id"] = str(item["_id"])
     return menu_items

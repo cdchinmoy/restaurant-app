@@ -757,6 +757,7 @@ async def get_user_orders(request: Request):
         },
         {
             "$addFields": {
+                "order_id": {"$toString": "$_id"},
                 "restaurant_name": {
                     "$ifNull": [
                         {"$arrayElemAt": ["$restaurant_data.name", 0]},

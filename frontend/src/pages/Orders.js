@@ -43,7 +43,7 @@ export const Orders = () => {
   useEffect(() => {
     if (orders.length > 0 && isConnected) {
       orders.forEach((order) => {
-        const orderId = order._id || order.order_id;
+        const orderId = order.order_id;
         if (orderId) {
           joinOrderRoom(orderId);
         }
@@ -52,7 +52,7 @@ export const Orders = () => {
       // Cleanup: leave rooms on unmount
       return () => {
         orders.forEach((order) => {
-          const orderId = order._id || order.order_id;
+          const orderId = order.order_id;
           if (orderId) {
             leaveOrderRoom(orderId);
           }
@@ -69,8 +69,7 @@ export const Orders = () => {
       // Update the orders list
       setOrders((prevOrders) =>
         prevOrders.map((order) => {
-          const currentOrderId = order._id || order.order_id;
-          if (currentOrderId === orderId) {
+          if (order.order_id === orderId) {
             // Show toast notification
             const statusLabel = update.status.replace('_', ' ').toUpperCase();
             toast.success(`Order status updated: ${statusLabel}`, {
@@ -193,7 +192,7 @@ export const Orders = () => {
                 {/* Track Order Button */}
                 {['confirmed', 'preparing', 'ready', 'on_the_way'].includes(order.status) && (
                   <div className="border-t border-border pt-4 mt-4">
-                    <Link to={`/track-order/${order._id || index}`}>
+                    <Link to={`/track-order/${order.order_id}`}>
                       <Button className="w-full bg-primary hover:bg-primary/90 text-white" data-testid={`track-order-${index}`}>
                         <MapPin className="h-4 w-4 mr-2" />
                         Track Order Live

@@ -15,6 +15,7 @@ import { Orders } from "./pages/Orders";
 import { OrderSuccess } from "./pages/OrderSuccess";
 import { Profile } from "./pages/Profile";
 import { AdminDashboard } from "./pages/AdminDashboard";
+import { OrderTracking } from "./pages/OrderTracking";
 
 function App() {
   return (
@@ -42,6 +43,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Orders />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/track-order/:orderId"
+                element={
+                  <ProtectedRoute>
+                    <OrderTracking />
                   </ProtectedRoute>
                 }
               />

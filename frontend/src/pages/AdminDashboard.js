@@ -33,6 +33,7 @@ export const AdminDashboard = () => {
   const [restaurants, setRestaurants] = useState([]);
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [restaurantForm, setRestaurantForm] = useState({
     name: '',
     description: '',
@@ -56,16 +57,18 @@ export const AdminDashboard = () => {
 
   const fetchAllData = async () => {
     try {
-      const [analyticsRes, restaurantsRes, ordersRes, usersRes] = await Promise.all([
+      const [analyticsRes, restaurantsRes, ordersRes, usersRes, driversRes] = await Promise.all([
         axios.get(`${BACKEND_URL}/api/admin/analytics`, { withCredentials: true }),
         axios.get(`${BACKEND_URL}/api/admin/restaurants`, { withCredentials: true }),
         axios.get(`${BACKEND_URL}/api/admin/orders`, { withCredentials: true }),
         axios.get(`${BACKEND_URL}/api/admin/users`, { withCredentials: true }),
+        axios.get(`${BACKEND_URL}/api/drivers`, { withCredentials: true }),
       ]);
       setAnalytics(analyticsRes.data);
       setRestaurants(restaurantsRes.data);
       setOrders(ordersRes.data);
       setUsers(usersRes.data);
+      setDrivers(driversRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -154,6 +157,20 @@ export const AdminDashboard = () => {
       fetchAllData();
     } catch (error) {
       toast.error('Failed to update order status');
+    }
+  };
+
+  const handleAssignDriver = async (orderId, driverId) => {
+    try {
+      await axios.post(
+        `${BACKEND_URL}/api/orders/${orderId}/assign-driver`,
+        { driver_id: driverId },
+        { withCredentials: true }
+      );
+      toast.success('Driver assigned successfully');
+      fetchAllData();
+    } catch (error) {
+      toast.error('Failed to assign driver');
     }
   };
 
@@ -417,25 +434,45 @@ export const AdminDashboard = () => {
                       ))}
                     </ul>
                   </div>
-                  <div>
-                    <Label className="text-sm">Update Status</Label>
-                    <Select
-                      value={order.status}
-                      onValueChange={(status) => handleUpdateOrderStatus(order._id, status)}
-                    >
-                      <SelectTrigger data-testid={`order-status-select-${index}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="confirmed">Confirmed</SelectItem>
-                        <SelectItem value="preparing">Preparing</SelectItem>
-                        <SelectItem value="ready">Ready</SelectItem>
-                        <SelectItem value="on_the_way">On the Way</SelectItem>
-                        <SelectItem value="delivered">Delivered</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm">Update Status</Label>
+                      <Select
+                        value={order.status}
+                        onValueChange={(status) => handleUpdateOrderStatus(order._id, status)}
+                      >
+                        <SelectTrigger data-testid={`order-status-select-${index}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="confirmed">Confirmed</SelectItem>
+                          <SelectItem value="preparing">Preparing</SelectItem>
+                          <SelectItem value="ready">Ready</SelectItem>
+                          <SelectItem value="on_the_way">On the Way</SelectItem>
+                          <SelectItem value="delivered">Delivered</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-sm">Assign Driver</Label>
+                      <Select
+                        value={order.driver_id || ''}
+                        onValueChange={(driverId) => handleAssignDriver(order._id, driverId)}
+                      >
+                        <SelectTrigger data-testid={`driver-assign-select-${index}`}>
+                          <SelectValue placeholder={order.driver_name || 'Select Driver'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {drivers.map((driver) => (
+                            <SelectItem key={driver._id} value={driver._id}>
+                              {driver.name} - {driver.vehicle_info}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               ))}

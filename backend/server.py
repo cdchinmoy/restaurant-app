@@ -71,6 +71,42 @@ async def leave_order_room(sid, data):
         await sio.leave_room(sid, f"order_{order_id}")
         logger.info(f"Client {sid} left order room: order_{order_id}")
 
+@sio.event
+async def update_driver_location(sid, data):
+    """Receive driver location update and broadcast to order room"""
+    driver_id = data.get('driver_id')
+    order_id = data.get('order_id')
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+    
+    if not all([driver_id, order_id, latitude, longitude]):
+        logger.warning(f"Invalid driver location update from {sid}")
+        return
+    
+    # Update driver location in database
+    await db.drivers.update_one(
+        {"_id": ObjectId(driver_id)},
+        {
+            "$set": {
+                "current_location": {
+                    "type": "Point",
+                    "coordinates": [longitude, latitude]
+                },
+                "last_updated": datetime.now(timezone.utc)
+            }
+        }
+    )
+    
+    # Broadcast to order room
+    room = f"order_{order_id}"
+    await sio.emit('driver_location_update', {
+        'driver_id': driver_id,
+        'latitude': latitude,
+        'longitude': longitude,
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    }, room=room)
+    logger.info(f"Driver {driver_id} location updated for order {order_id}")
+
 async def broadcast_order_update(order_id: str, order_data: dict):
     """Broadcast order status update to all clients in the order room"""
     room = f"order_{order_id}"
@@ -218,6 +254,14 @@ class AddressUpdate(BaseModel):
 class CheckoutRequest(BaseModel):
     order_id: str
     origin_url: str
+
+class DriverLocationUpdate(BaseModel):
+    driver_id: str
+    latitude: float
+    longitude: float
+
+class AssignDriverRequest(BaseModel):
+    driver_id: str
 
 # ==================== Startup Events ====================
 @fastapi_app.on_event("startup")
@@ -372,6 +416,62 @@ async def startup_event():
         ])
         
         await db.menu_items.insert_many(menu_items)
+    
+    # Seed drivers
+    driver_count = await db.drivers.count_documents({})
+    if driver_count == 0:
+        sample_drivers = [
+            {
+                "name": "John Driver",
+                "phone": "+1234567890",
+                "email": "john.driver@quickbites.com",
+                "vehicle_info": "Honda Civic - ABC123",
+                "photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+                "rating": 4.8,
+                "total_deliveries": 245,
+                "is_available": True,
+                "current_location": {
+                    "type": "Point",
+                    "coordinates": [-122.4194, 37.7749]  # San Francisco
+                },
+                "last_updated": datetime.now(timezone.utc),
+                "created_at": datetime.now(timezone.utc)
+            },
+            {
+                "name": "Sarah Delivery",
+                "phone": "+1234567891",
+                "email": "sarah.delivery@quickbites.com",
+                "vehicle_info": "Toyota Prius - XYZ789",
+                "photo_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
+                "rating": 4.9,
+                "total_deliveries": 312,
+                "is_available": True,
+                "current_location": {
+                    "type": "Point",
+                    "coordinates": [-122.4084, 37.7849]
+                },
+                "last_updated": datetime.now(timezone.utc),
+                "created_at": datetime.now(timezone.utc)
+            },
+            {
+                "name": "Mike Fast",
+                "phone": "+1234567892",
+                "email": "mike.fast@quickbites.com",
+                "vehicle_info": "Motorcycle - FAST01",
+                "photo_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
+                "rating": 4.7,
+                "total_deliveries": 198,
+                "is_available": True,
+                "current_location": {
+                    "type": "Point",
+                    "coordinates": [-122.4294, 37.7649]
+                },
+                "last_updated": datetime.now(timezone.utc),
+                "created_at": datetime.now(timezone.utc)
+            }
+        ]
+        await db.drivers.insert_many(sample_drivers)
+        await db.drivers.create_index([("current_location", "2dsphere")])
 
 # ==================== Auth Routes ====================
 @api_router.post("/auth/register")
@@ -920,6 +1020,124 @@ async def stripe_webhook(request: Request):
         return {"message": "Webhook processed"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# ==================== Driver Routes ====================
+@api_router.get("/drivers")
+async def get_available_drivers():
+    """Get all available drivers"""
+    drivers = await db.drivers.find({"is_available": True}).to_list(50)
+    for driver in drivers:
+        driver["_id"] = str(driver["_id"])
+    return drivers
+
+@api_router.get("/drivers/{driver_id}")
+async def get_driver(driver_id: str):
+    """Get driver details"""
+    if not ObjectId.is_valid(driver_id):
+        raise HTTPException(status_code=400, detail="Invalid driver ID")
+    
+    driver = await db.drivers.find_one({"_id": ObjectId(driver_id)})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    
+    driver["_id"] = str(driver["_id"])
+    return driver
+
+@api_router.post("/orders/{order_id}/assign-driver")
+async def assign_driver_to_order(order_id: str, data: AssignDriverRequest, request: Request):
+    """Assign a driver to an order (Admin only)"""
+    await get_current_admin(request)
+    
+    if not ObjectId.is_valid(order_id) or not ObjectId.is_valid(data.driver_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    
+    # Check if driver exists and is available
+    driver = await db.drivers.find_one({"_id": ObjectId(data.driver_id), "is_available": True})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not available")
+    
+    # Update order with driver info
+    result = await db.orders.update_one(
+        {"_id": ObjectId(order_id)},
+        {
+            "$set": {
+                "driver_id": data.driver_id,
+                "driver_name": driver["name"],
+                "driver_phone": driver["phone"],
+                "driver_vehicle": driver.get("vehicle_info", ""),
+                "status": "on_the_way",
+                "updated_at": datetime.now(timezone.utc)
+            }
+        }
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Mark driver as busy
+    await db.drivers.update_one(
+        {"_id": ObjectId(data.driver_id)},
+        {"$set": {"is_available": False, "current_order_id": order_id}}
+    )
+    
+    # Broadcast update
+    order = await db.orders.find_one({"_id": ObjectId(order_id)})
+    if order:
+        order_data = {
+            "order_id": order_id,
+            "status": "on_the_way",
+            "driver": {
+                "id": data.driver_id,
+                "name": driver["name"],
+                "phone": driver["phone"],
+                "vehicle": driver.get("vehicle_info", ""),
+                "photo": driver.get("photo_url", "")
+            },
+            "updated_at": datetime.now(timezone.utc)
+        }
+        await broadcast_order_update(order_id, order_data)
+    
+    return {"message": "Driver assigned successfully", "driver_name": driver["name"]}
+
+@api_router.get("/orders/{order_id}/driver-location")
+async def get_driver_location(order_id: str, request: Request):
+    """Get current driver location for an order"""
+    user = await get_current_user(request)
+    
+    if not ObjectId.is_valid(order_id):
+        raise HTTPException(status_code=400, detail="Invalid order ID")
+    
+    order = await db.orders.find_one({"_id": ObjectId(order_id), "user_id": user["_id"]})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    driver_id = order.get("driver_id")
+    if not driver_id or not ObjectId.is_valid(driver_id):
+        return {"driver_assigned": False}
+    
+    driver = await db.drivers.find_one({"_id": ObjectId(driver_id)})
+    if not driver:
+        return {"driver_assigned": False}
+    
+    location = driver.get("current_location", {})
+    coordinates = location.get("coordinates", [0, 0])
+    
+    return {
+        "driver_assigned": True,
+        "driver": {
+            "id": str(driver["_id"]),
+            "name": driver["name"],
+            "phone": driver["phone"],
+            "vehicle": driver.get("vehicle_info", ""),
+            "photo": driver.get("photo_url", ""),
+            "rating": driver.get("rating", 0)
+        },
+        "location": {
+            "latitude": coordinates[1] if len(coordinates) > 1 else 0,
+            "longitude": coordinates[0] if len(coordinates) > 0 else 0
+        },
+        "last_updated": driver.get("last_updated", datetime.now(timezone.utc)).isoformat() if driver.get("last_updated") else datetime.now(timezone.utc).isoformat()
+    }
 
 # ==================== Admin Routes ====================
 @api_router.get("/admin/restaurants")

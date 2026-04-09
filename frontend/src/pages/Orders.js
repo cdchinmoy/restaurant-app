@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Header } from '../components/Header';
 import { Badge } from '../components/ui/badge';
-import { Clock } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Clock, MapPin } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -186,6 +187,18 @@ export const Orders = () => {
                       {order.delivery_address.street}, {order.delivery_address.city},{' '}
                       {order.delivery_address.state} {order.delivery_address.zip_code}
                     </p>
+                  </div>
+                )}
+
+                {/* Track Order Button */}
+                {['confirmed', 'preparing', 'ready', 'on_the_way'].includes(order.status) && (
+                  <div className="border-t border-border pt-4 mt-4">
+                    <Link to={`/track-order/${order._id || index}`}>
+                      <Button className="w-full bg-primary hover:bg-primary/90 text-white" data-testid={`track-order-${index}`}>
+                        <MapPin className="h-4 w-4 mr-2" />
+                        Track Order Live
+                      </Button>
+                    </Link>
                   </div>
                 )}
               </div>

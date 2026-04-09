@@ -477,7 +477,7 @@ async def get_restaurants(
     if search:
         query["name"] = {"$regex": search, "$options": "i"}
     
-    restaurants = await db.restaurants.find(query).to_list(100)
+    restaurants = await db.restaurants.find(query).limit(100).to_list(None)
     for r in restaurants:
         r["_id"] = str(r["_id"])
     return restaurants
@@ -496,20 +496,37 @@ async def get_restaurant(restaurant_id: str):
 
 @api_router.get("/restaurants/{restaurant_id}/menu")
 async def get_restaurant_menu(restaurant_id: str):
-    menu_items = await db.menu_items.find({"restaurant_id": restaurant_id, "is_available": True}).to_list(100)
+    menu_items = await db.menu_items.find(
+        {"restaurant_id": restaurant_id, "is_available": True}
+    ).limit(100).to_list(None)
     for item in menu_items:
         item["_id"] = str(item["_id"])
     return menu_items
 
 @api_router.get("/restaurants/{restaurant_id}/reviews")
 async def get_restaurant_reviews(restaurant_id: str):
-    reviews = await db.reviews.find({"restaurant_id": restaurant_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    
-    # Populate user names
-    for review in reviews:
-        user = await db.users.find_one({"_id": ObjectId(review["user_id"])}, {"name": 1, "_id": 0})
-        review["user_name"] = user["name"] if user else "Unknown"
-    
+    pipeline = [
+        {"$match": {"restaurant_id": restaurant_id}},
+        {"$sort": {"created_at": -1}},
+        {"$limit": 50},
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "user_id",
+                "foreignField": "_id",
+                "as": "user_data"
+            }
+        },
+        {
+            "$addFields": {
+                "user_name": {
+                    "$ifNull": [{"$arrayElemAt": ["$user_data.name", 0]}, "Unknown"]
+                }
+            }
+        },
+        {"$project": {"user_data": 0, "_id": 0}}
+    ]
+    reviews = await db.reviews.aggregate(pipeline).to_list(None)
     return reviews
 
 # ==================== Order Routes ====================
@@ -553,18 +570,44 @@ async def create_order(data: OrderCreate, request: Request):
 @api_router.get("/orders")
 async def get_user_orders(request: Request):
     user = await get_current_user(request)
-    orders = await db.orders.find({"user_id": user["_id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     
-    # Populate restaurant names
-    for order in orders:
-        if ObjectId.is_valid(order["restaurant_id"]):
-            restaurant = await db.restaurants.find_one({"_id": ObjectId(order["restaurant_id"])}, {"name": 1, "_id": 0})
-            order["restaurant_name"] = restaurant["name"] if restaurant else "Unknown"
-        else:
-            # Handle string restaurant_id
-            restaurant = await db.restaurants.find_one({"name": order["restaurant_id"]}, {"name": 1, "_id": 0})
-            order["restaurant_name"] = restaurant["name"] if restaurant else order.get("restaurant_id", "Unknown")
+    pipeline = [
+        {"$match": {"user_id": user["_id"]}},
+        {"$sort": {"created_at": -1}},
+        {"$limit": 50},
+        {
+            "$addFields": {
+                "restaurant_oid": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$restaurant_id"}, "objectId"]},
+                        "then": "$restaurant_id",
+                        "else": None
+                    }
+                }
+            }
+        },
+        {
+            "$lookup": {
+                "from": "restaurants",
+                "localField": "restaurant_oid",
+                "foreignField": "_id",
+                "as": "restaurant_data"
+            }
+        },
+        {
+            "$addFields": {
+                "restaurant_name": {
+                    "$ifNull": [
+                        {"$arrayElemAt": ["$restaurant_data.name", 0]},
+                        "$restaurant_id"
+                    ]
+                }
+            }
+        },
+        {"$project": {"restaurant_data": 0, "restaurant_oid": 0, "_id": 0}}
+    ]
     
+    orders = await db.orders.aggregate(pipeline).to_list(None)
     return orders
 
 @api_router.get("/orders/{order_id}")
@@ -604,11 +647,15 @@ async def create_review(data: ReviewCreate, request: Request):
     
     await db.reviews.insert_one(review_doc)
     
-    # Update restaurant rating
-    reviews = await db.reviews.find({"restaurant_id": data.restaurant_id}).to_list(1000)
-    avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+    # Update restaurant rating using aggregation
+    pipeline = [
+        {"$match": {"restaurant_id": data.restaurant_id}},
+        {"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}}}
+    ]
+    result = await db.reviews.aggregate(pipeline).to_list(None)
     
-    if ObjectId.is_valid(data.restaurant_id):
+    if result and ObjectId.is_valid(data.restaurant_id):
+        avg_rating = result[0]["avg_rating"]
         await db.restaurants.update_one(
             {"_id": ObjectId(data.restaurant_id)},
             {"$set": {"rating": round(avg_rating, 1)}}
@@ -817,7 +864,7 @@ async def stripe_webhook(request: Request):
 @api_router.get("/admin/restaurants")
 async def admin_get_restaurants(request: Request):
     await get_current_admin(request)
-    restaurants = await db.restaurants.find({}).to_list(100)
+    restaurants = await db.restaurants.find({}).limit(100).to_list(None)
     
     for r in restaurants:
         r["_id"] = str(r["_id"])
@@ -879,7 +926,7 @@ async def admin_get_menu_items(request: Request, restaurant_id: Optional[str] = 
     if restaurant_id:
         query["restaurant_id"] = restaurant_id
     
-    items = await db.menu_items.find(query).to_list(500)
+    items = await db.menu_items.find(query).limit(500).to_list(None)
     
     for item in items:
         item["_id"] = str(item["_id"])
@@ -935,22 +982,56 @@ async def admin_delete_menu_item(item_id: str, request: Request):
 @api_router.get("/admin/orders")
 async def admin_get_orders(request: Request):
     await get_current_admin(request)
-    orders = await db.orders.find({}).sort("created_at", -1).to_list(100)
+    
+    pipeline = [
+        {"$sort": {"created_at": -1}},
+        {"$limit": 100},
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "user_id",
+                "foreignField": "_id",
+                "as": "user_data"
+            }
+        },
+        {
+            "$addFields": {
+                "restaurant_oid": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$restaurant_id"}, "objectId"]},
+                        "then": "$restaurant_id",
+                        "else": None
+                    }
+                }
+            }
+        },
+        {
+            "$lookup": {
+                "from": "restaurants",
+                "localField": "restaurant_oid",
+                "foreignField": "_id",
+                "as": "restaurant_data"
+            }
+        },
+        {
+            "$addFields": {
+                "user_name": {"$ifNull": [{"$arrayElemAt": ["$user_data.name", 0]}, "Unknown"]},
+                "user_email": {"$ifNull": [{"$arrayElemAt": ["$user_data.email", 0]}, "Unknown"]},
+                "restaurant_name": {
+                    "$ifNull": [
+                        {"$arrayElemAt": ["$restaurant_data.name", 0]},
+                        "$restaurant_id"
+                    ]
+                }
+            }
+        },
+        {"$project": {"user_data": 0, "restaurant_data": 0, "restaurant_oid": 0}}
+    ]
+    
+    orders = await db.orders.aggregate(pipeline).to_list(None)
     
     for order in orders:
         order["_id"] = str(order["_id"])
-        
-        # Populate user info
-        user = await db.users.find_one({"_id": ObjectId(order["user_id"])}, {"name": 1, "email": 1, "_id": 0})
-        order["user_name"] = user["name"] if user else "Unknown"
-        order["user_email"] = user["email"] if user else "Unknown"
-        
-        # Populate restaurant info
-        if ObjectId.is_valid(order["restaurant_id"]):
-            restaurant = await db.restaurants.find_one({"_id": ObjectId(order["restaurant_id"])}, {"name": 1, "_id": 0})
-            order["restaurant_name"] = restaurant["name"] if restaurant else "Unknown"
-        else:
-            order["restaurant_name"] = order.get("restaurant_id", "Unknown")
     
     return orders
 

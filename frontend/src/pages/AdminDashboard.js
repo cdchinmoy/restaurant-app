@@ -757,6 +757,7 @@ export const AdminDashboard = () => {
                       <Select
                         value={order.status}
                         onValueChange={(status) => handleUpdateOrderStatus(order._id, status)}
+                        disabled={['delivered', 'cancelled'].includes(order.status)}
                       >
                         <SelectTrigger data-testid={`order-status-select-${index}`}>
                           <SelectValue />
@@ -771,24 +772,49 @@ export const AdminDashboard = () => {
                           <SelectItem value="cancelled">Cancelled</SelectItem>
                         </SelectContent>
                       </Select>
+                      {['delivered', 'cancelled'].includes(order.status) && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Status is final and cannot be changed
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-sm">Assign Driver</Label>
-                      <Select
-                        value={order.driver_id || ''}
-                        onValueChange={(driverId) => handleAssignDriver(order._id, driverId)}
-                      >
-                        <SelectTrigger data-testid={`driver-assign-select-${index}`}>
-                          <SelectValue placeholder={order.driver_name || 'Select Driver'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {drivers.map((driver) => (
-                            <SelectItem key={driver._id} value={driver._id}>
-                              {driver.name} - {driver.vehicle_info}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {order.driver_name && ['on_the_way', 'delivered'].includes(order.status) ? (
+                        <div className="flex items-center h-10 px-3 py-2 border border-border rounded-md bg-muted">
+                          <span className="text-sm">
+                            {order.driver_name}
+                            {order.driver_vehicle && ` - ${order.driver_vehicle}`}
+                          </span>
+                        </div>
+                      ) : (
+                        <Select
+                          value={order.driver_id || 'none'}
+                          onValueChange={(driverId) => {
+                            if (driverId !== 'none') {
+                              handleAssignDriver(order._id, driverId);
+                            }
+                          }}
+                          disabled={['delivered', 'cancelled'].includes(order.status)}
+                        >
+                          <SelectTrigger data-testid={`driver-assign-select-${index}`}>
+                            <SelectValue placeholder="Select Driver" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Driver Assigned</SelectItem>
+                            {drivers.map((driver) => (
+                              <SelectItem key={driver._id} value={driver._id}>
+                                {driver.name} - {driver.vehicle_info}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {['delivered', 'cancelled'].includes(order.status) && !order.driver_name && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Order completed without driver
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

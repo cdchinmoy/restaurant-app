@@ -1,0 +1,119 @@
+{
+  "theme": "Light",
+  "archetype": "1 (Organic & Earthy)",
+  "vibe": "Warm, inviting, sensory. Let food/place imagery shine while maintaining functional clarity.",
+  "typography": {
+    "headings": {
+      "family": "Cabinet Grotesk",
+      "import_url": "https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,500,700,400&display=swap",
+      "weights": ["400", "500", "700", "800"],
+      "usage": "Use tight letter spacing (tracking-tight) for large headers (text-4xl+). Never use 'Inter' for headings."
+    },
+    "body": {
+      "family": "Manrope",
+      "import_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap",
+      "weights": ["400", "500", "600", "700"],
+      "usage": "Use leading-relaxed for body text. Perfect for dense UI like admin dashboard."
+    },
+    "hierarchy_rules": "H1 max text-5xl/6xl. Do not exceed 2 tailwind steps for heading-to-subtitle jumps. Overlines must be uppercase + tracking-[0.2em] + text-xs."
+  },
+  "colors": {
+    "background": {
+      "page": "#FDFBF7",
+      "surface": "#FFFFFF",
+      "surface_alt": "#F5F3EC",
+      "glass": "bg-white/70 backdrop-blur-xl backdrop-saturate-150"
+    },
+    "primary": {
+      "DEFAULT": "#E05D36",
+      "hover": "#C64A26",
+      "foreground": "#FFFFFF"
+    },
+    "secondary": {
+      "DEFAULT": "#4A6B53",
+      "hover": "#395340",
+      "foreground": "#FFFFFF"
+    },
+    "text": {
+      "primary": "#1A1F16",
+      "muted": "#5C6656",
+      "inverse": "#FFFFFF"
+    },
+    "border": {
+      "DEFAULT": "#E8E6E1",
+      "focus": "#E05D36"
+    },
+    "status": {
+      "success": "#4A6B53",
+      "warning": "#F2A65A",
+      "danger": "#D34E4E"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Generous Spacing Philosophy. Use p-8 or p-12 for luxurious spacing on user-facing pages.",
+    "marketing_pages": {
+      "grid": "grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-8",
+      "style": "The 'Tetris' Grid for promos. Asymmetric. Mix spans like col-span-8 row-span-2 and col-span-4."
+    },
+    "admin_dashboard": {
+      "grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "style": "The 'Control Room' Grid. Strict hierarchy, dense and compact. Every pixel utilized with h-full."
+    },
+    "border_radius": "rounded-2xl for user-facing elements, rounded-lg for admin dashboard widgets.",
+    "shadows": {
+      "default": "shadow-[0_4px_20px_rgba(26,31,22,0.04)]",
+      "hover": "hover:shadow-[0_8px_30px_rgba(26,31,22,0.08)] -translate-y-1 transition-all duration-300"
+    }
+  },
+  "components": {
+    "buttons": "Always explicit text color on hover (e.g., hover:bg-[#C64A26] hover:text-white). No generic default borders.",
+    "cards": "Cardless rectangular vibe or subtle roundness. Don't rely solely on shadows; use a sharp 1px border-border to ground them.",
+    "inputs_forms": "Use Shadcn Form components but heavily customize. Remove the 'Vercel-look'. Focus rings must use the primary brand color (#E05D36).",
+    "header_nav": "Visible navigation bar required. Use Crystal Glass (backdrop-blur-xl bg-white/70 border-b border-[#E8E6E1]) if sticky. z-50 mandatory.",
+    "data_testid": "All interactive elements MUST have data-testid attributes (kebab-case, role-based). Example: data-testid='checkout-submit-button'."
+  },
+  "media": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1768697358705-c1b60333da35?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwyfHxyZXN0YXVyYW50JTIwaW50ZXJpb3IlMjB3YXJtJTIwbGlnaHRpbmd8ZW58MHx8fHwxNzc1NzA3NDU2fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Warm restaurant interior. Use with bg-black/40 overlay to ensure text contrast."
+    },
+    "restaurants": [
+      {
+        "category": "Burger",
+        "url": "https://images.unsplash.com/photo-1639262881416-01dca65c37ce?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHw0fHxkZWxpY2lvdXMlMjBnb3VybWV0JTIwYnVyZ2VyJTIwZGFyayUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc1NzA3NDQwfDA&ixlib=rb-4.1.0&q=85",
+        "alt": "Gourmet Burger"
+      },
+      {
+        "category": "Healthy/Salad",
+        "url": "https://images.unsplash.com/photo-1622637103261-ae624e188bd0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHw0fHxmcmVzaCUyMGhlYWx0aHklMjBzYWxhZCUyMGJvd2x8ZW58MHx8fHwxNzc1NzA3NDQwfDA&ixlib=rb-4.1.0&q=85",
+        "alt": "Fresh Healthy Salad Bowl"
+      },
+      {
+        "category": "Sushi",
+        "url": "https://images.unsplash.com/photo-1663870158409-2d3c78ba0a9f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwxfHxzdXNoaSUyMHBsYXR0ZXIlMjB0b3AlMjB2aWV3fGVufDB8fHx8MTc3NTcwNzQ0MHww&ixlib=rb-4.1.0&q=85",
+        "alt": "Sushi Platter Top View"
+      },
+      {
+        "category": "Pizza",
+        "url": "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxwaXp6YSUyMHRvcCUyMHZpZXd8ZW58MHx8fHwxNzc1NzA3NDU2fDA&ixlib=rb-4.1.0&q=85",
+        "alt": "Pizza Top View"
+      }
+    ],
+    "user_avatar": {
+      "url": "https://images.unsplash.com/photo-1639149888905-fb39731f2e6c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBhdmF0YXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NzU3MDc0NTd8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Default user profile picture"
+    }
+  },
+  "icons_and_motion": {
+    "icon_library": "lucide-react (default) or @phosphor-icons/react (Duotone weight) for a high-end app feel. Install @phosphor-icons/react if using it.",
+    "motion": "Use framer-motion for page transitions and layout animations. Keep it subtle (0.2s-0.3s ease). Hover states must feel responsive but not erratic."
+  },
+  "instructions_to_main_agent": [
+    "1. Setup Tailwind config with the specified colors and fonts. Import Cabinet Grotesk and Manrope in the global CSS.",
+    "2. Implement a unified layout with a sticky glassmorphism header.",
+    "3. Build the user-facing app (home, search, cart, checkout) focusing on large appetizing imagery, rounded-2xl cards, and generous whitespace.",
+    "4. Build the Admin Dashboard using a separate, denser layout route (/admin). Use 1px borders, smaller border-radius (rounded-lg), and compact spacing for data density.",
+    "5. Do NOT use standard Shadcn card defaults; customize them to match the border and shadow properties defined here.",
+    "6. Include data-testid on all links, buttons, and form inputs."
+  ]
+}

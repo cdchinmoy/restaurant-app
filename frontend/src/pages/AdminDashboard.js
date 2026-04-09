@@ -35,7 +35,7 @@ export const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
-  const [selectedRestaurant, setSelectedRestaurant] = useState('');
+  const [selectedRestaurant, setSelectedRestaurant] = useState('all');
   const [restaurantForm, setRestaurantForm] = useState({
     name: '',
     description: '',
@@ -612,14 +612,14 @@ export const AdminDashboard = () => {
                 value={selectedRestaurant}
                 onValueChange={(value) => {
                   setSelectedRestaurant(value);
-                  fetchMenuItems(value);
+                  fetchMenuItems(value === 'all' ? '' : value);
                 }}
               >
                 <SelectTrigger className="w-64" data-testid="filter-restaurant-select">
                   <SelectValue placeholder="All Restaurants" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Restaurants</SelectItem>
+                  <SelectItem value="all">All Restaurants</SelectItem>
                   {restaurants.map((restaurant) => (
                     <SelectItem key={restaurant._id} value={restaurant._id}>
                       {restaurant.name}
@@ -629,7 +629,7 @@ export const AdminDashboard = () => {
               </Select>
               <Button
                 variant="outline"
-                onClick={() => fetchMenuItems(selectedRestaurant)}
+                onClick={() => fetchMenuItems(selectedRestaurant === 'all' ? '' : selectedRestaurant)}
                 data-testid="refresh-menu-items"
               >
                 Refresh

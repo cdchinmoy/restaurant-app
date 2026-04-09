@@ -14,6 +14,8 @@ import bcrypt
 import jwt
 import secrets
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+import socketio
+from notifications import notify_order_status_change, send_order_confirmation, send_welcome_email
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -23,11 +25,67 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-app = FastAPI()
+# Initialize Socket.IO
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    cors_allowed_origins='*',
+    logger=True,
+    engineio_logger=True
+)
+
+# Create FastAPI app
+fastapi_app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 JWT_ALGORITHM = "HS256"
 JWT_SECRET = os.environ['JWT_SECRET']
+
+# ==================== Socket.IO Events ====================
+logger = logging.getLogger(__name__)
+
+@sio.event
+async def connect(sid, environ):
+    logger.info(f"Client connected: {sid}")
+    await sio.emit('connection_status', {'status': 'connected'}, room=sid)
+
+@sio.event
+async def disconnect(sid):
+    logger.info(f"Client disconnected: {sid}")
+
+@sio.event
+async def join_order_room(sid, data):
+    """Join a room for specific order updates"""
+    order_id = data.get('order_id')
+    if not order_id:
+        logger.warning(f"join_order_room called without order_id for {sid}")
+        return
+    await sio.enter_room(sid, f"order_{order_id}")
+    logger.info(f"Client {sid} joined order room: order_{order_id}")
+    await sio.emit('room_joined', {'order_id': order_id}, room=sid)
+
+@sio.event
+async def leave_order_room(sid, data):
+    """Leave a specific order room"""
+    order_id = data.get('order_id')
+    if order_id:
+        await sio.leave_room(sid, f"order_{order_id}")
+        logger.info(f"Client {sid} left order room: order_{order_id}")
+
+async def broadcast_order_update(order_id: str, order_data: dict):
+    """Broadcast order status update to all clients in the order room"""
+    room = f"order_{order_id}"
+    # Convert datetime to ISO string for JSON serialization
+    if 'updated_at' in order_data and isinstance(order_data['updated_at'], datetime):
+        order_data['updated_at'] = order_data['updated_at'].isoformat()
+    if 'created_at' in order_data and isinstance(order_data['created_at'], datetime):
+        order_data['created_at'] = order_data['created_at'].isoformat()
+    
+    await sio.emit('order_update', {
+        'order_id': order_id,
+        'status': order_data.get('status'),
+        'data': order_data
+    }, room=room)
+    logger.info(f"Broadcasted order update to room {room}: status={order_data.get('status')}")
 
 # ==================== Helper Functions ====================
 def hash_password(password: str) -> str:
@@ -162,7 +220,7 @@ class CheckoutRequest(BaseModel):
     origin_url: str
 
 # ==================== Startup Events ====================
-@app.on_event("startup")
+@fastapi_app.on_event("startup")
 async def startup_event():
     # Create indexes
     await db.users.create_index("email", unique=True)
@@ -333,6 +391,9 @@ async def register(data: RegisterRequest, response: Response):
     }
     result = await db.users.insert_one(user_doc)
     user_id = str(result.inserted_id)
+    
+    # Send welcome email (mocked)
+    await send_welcome_email(email, data.name)
     
     access_token = create_access_token(user_id, email)
     refresh_token = create_refresh_token(user_id)
@@ -1054,6 +1115,33 @@ async def admin_update_order_status(order_id: str, status: str, request: Request
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Order not found")
     
+    # Get updated order and broadcast via WebSocket
+    order = await db.orders.find_one({"_id": ObjectId(order_id)})
+    if order:
+        # Get user info for notifications
+        user = await db.users.find_one({"_id": ObjectId(order["user_id"])}, {"email": 1, "phone": 1, "_id": 0})
+        
+        # Send notifications (mocked)
+        if user:
+            await notify_order_status_change(
+                order, 
+                status, 
+                user.get("email"), 
+                user.get("phone")
+            )
+        
+        # Prepare order data for broadcast
+        order_data = {
+            "order_id": order_id,
+            "status": status,
+            "updated_at": order.get("updated_at"),
+            "total_amount": order.get("total_amount"),
+            "items": order.get("items", [])
+        }
+        
+        # Broadcast to WebSocket clients
+        await broadcast_order_update(order_id, order_data)
+    
     return {"message": "Order status updated successfully"}
 
 @api_router.get("/admin/analytics")
@@ -1087,9 +1175,9 @@ async def admin_get_users(request: Request):
     return users
 
 # Include router
-app.include_router(api_router)
+fastapi_app.include_router(api_router)
 
-app.add_middleware(
+fastapi_app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
@@ -1101,8 +1189,22 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
 
-@app.on_event("shutdown")
+@fastapi_app.on_event("startup")
+async def startup():
+    logger.info("FastAPI server starting with WebSocket support")
+
+@fastapi_app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+    logger.info("MongoDB connection closed")
+
+# Wrap FastAPI with Socket.IO
+socket_app = socketio.ASGIApp(
+    sio,
+    other_asgi_app=fastapi_app,
+    socketio_path='/api/socket.io'
+)
+
+# Export the Socket.IO wrapped app
+app = socket_app

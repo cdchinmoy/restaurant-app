@@ -4,7 +4,9 @@ import { Header } from '../components/Header';
 import { Badge } from '../components/ui/badge';
 import { Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useWebSocket } from '../contexts/WebSocketContext';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -23,6 +25,7 @@ export const Orders = () => {
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState([]);
   const { user } = useAuth();
+  const { isConnected, joinOrderRoom, leaveOrderRoom, orderUpdates } = useWebSocket();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,6 +37,56 @@ export const Orders = () => {
     setCart(savedCart);
     fetchOrders();
   }, [user]);
+
+  // Join WebSocket rooms for all orders
+  useEffect(() => {
+    if (orders.length > 0 && isConnected) {
+      orders.forEach((order) => {
+        const orderId = order._id || order.order_id;
+        if (orderId) {
+          joinOrderRoom(orderId);
+        }
+      });
+
+      // Cleanup: leave rooms on unmount
+      return () => {
+        orders.forEach((order) => {
+          const orderId = order._id || order.order_id;
+          if (orderId) {
+            leaveOrderRoom(orderId);
+          }
+        });
+      };
+    }
+  }, [orders, isConnected]);
+
+  // Listen for real-time order updates
+  useEffect(() => {
+    Object.keys(orderUpdates).forEach((orderId) => {
+      const update = orderUpdates[orderId];
+      
+      // Update the orders list
+      setOrders((prevOrders) =>
+        prevOrders.map((order) => {
+          const currentOrderId = order._id || order.order_id;
+          if (currentOrderId === orderId) {
+            // Show toast notification
+            const statusLabel = update.status.replace('_', ' ').toUpperCase();
+            toast.success(`Order status updated: ${statusLabel}`, {
+              description: `Your order is now ${update.status.replace('_', ' ')}`,
+            });
+            
+            return {
+              ...order,
+              status: update.status,
+              updated_at: update.data.updated_at,
+            };
+          }
+          return order;
+        })
+      );
+    });
+  }, [orderUpdates]);
 
   const fetchOrders = async () => {
     try {
@@ -58,8 +111,19 @@ export const Orders = () => {
 
       <div className="container mx-auto px-4 py-12">
         <div className="mb-8">
-          <h1 className="text-4xl font-heading font-bold tracking-tight mb-2">My Orders</h1>
-          <p className="text-muted-foreground">Track your orders and view history</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-heading font-bold tracking-tight mb-2">My Orders</h1>
+              <p className="text-muted-foreground">Track your orders and view history</p>
+            </div>
+            {/* WebSocket Connection Status */}
+            <div className="flex items-center space-x-2">
+              <div className={`h-3 w-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+              <span className="text-sm text-muted-foreground">
+                {isConnected ? 'Live tracking active' : 'Connecting...'}
+              </span>
+            </div>
+          </div>
         </div>
 
         {loading ? (

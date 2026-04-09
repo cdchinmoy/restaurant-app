@@ -3,20 +3,36 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Header } from '../components/Header';
 import { Button } from '../components/ui/button';
+import { RecommendationSection } from '../components/RecommendationSection';
 import { Star, Clock, DollarSign, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export const Home = () => {
   const [restaurants, setRestaurants] = useState([]);
   const [cart, setCart] = useState([]);
+  const [personalizedRecs, setPersonalizedRecs] = useState([]);
+  const [trendingItems, setTrendingItems] = useState([]);
+  const [popularItems, setPopularItems] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchRestaurants();
+    fetchRecommendations();
     const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
     setCart(savedCart);
-  }, []);
+    
+    // Listen for cart updates
+    const handleStorageChange = () => {
+      const updatedCart = JSON.parse(localStorage.getItem('cart') || '[]');
+      setCart(updatedCart);
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [user]);
 
   const fetchRestaurants = async () => {
     try {
@@ -24,6 +40,36 @@ export const Home = () => {
       setRestaurants(data);
     } catch (error) {
       console.error('Error fetching restaurants:', error);
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    setLoadingRecs(true);
+    try {
+      const [trendingRes, popularRes] = await Promise.all([
+        axios.get(`${BACKEND_URL}/api/recommendations/trending`),
+        axios.get(`${BACKEND_URL}/api/recommendations/popular`),
+      ]);
+      
+      setTrendingItems(trendingRes.data);
+      setPopularItems(popularRes.data);
+      
+      // Fetch personalized recommendations if user is logged in
+      if (user) {
+        try {
+          const personalizedRes = await axios.get(
+            `${BACKEND_URL}/api/recommendations/personalized`,
+            { withCredentials: true }
+          );
+          setPersonalizedRecs(personalizedRes.data);
+        } catch (error) {
+          console.log('Could not fetch personalized recommendations');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+    } finally {
+      setLoadingRecs(false);
     }
   };
 
@@ -69,6 +115,25 @@ export const Home = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* Personalized Recommendations */}
+      {user && personalizedRecs.length > 0 && (
+        <RecommendationSection
+          title="Recommended for You"
+          description="Based on your order history and preferences"
+          items={personalizedRecs}
+          loading={loadingRecs}
+        />
+      )}
+
+      {/* Trending Items */}
+      <RecommendationSection
+        title="Trending Now"
+        description="Most popular items this week"
+        items={trendingItems}
+        loading={loadingRecs}
+        showBadge="trending"
+      />
 
       {/* Featured Restaurants */}
       <section className="py-16">
@@ -141,6 +206,15 @@ export const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* Popular Items */}
+      <RecommendationSection
+        title="Popular in Your Area"
+        description="Fan favorites across all restaurants"
+        items={popularItems}
+        loading={loadingRecs}
+        showBadge="popular"
+      />
 
       {/* How It Works */}
       <section className="py-16 bg-muted">

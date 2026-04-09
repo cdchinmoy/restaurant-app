@@ -16,6 +16,14 @@ import secrets
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 import socketio
 from notifications import notify_order_status_change, send_order_confirmation, send_welcome_email
+from recommendations import (
+    get_personalized_recommendations,
+    get_popular_items,
+    get_similar_items,
+    get_frequently_bought_together,
+    get_trending_items,
+    get_reorder_suggestions
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1021,6 +1029,45 @@ async def stripe_webhook(request: Request):
         return {"message": "Webhook processed"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# ==================== Recommendation Routes ====================
+@api_router.get("/recommendations/personalized")
+async def get_user_recommendations(request: Request, limit: int = 6):
+    """Get personalized recommendations for logged-in user"""
+    user = await get_current_user(request)
+    recommendations = await get_personalized_recommendations(db, user["_id"], limit)
+    return recommendations
+
+@api_router.get("/recommendations/popular")
+async def get_popular_recommendations(limit: int = 6):
+    """Get popular items across platform"""
+    items = await get_popular_items(db, limit)
+    return items
+
+@api_router.get("/recommendations/trending")
+async def get_trending_recommendations(days: int = 7, limit: int = 6):
+    """Get trending items from recent orders"""
+    items = await get_trending_items(db, days, limit)
+    return items
+
+@api_router.get("/recommendations/similar/{item_id}")
+async def get_similar_recommendations(item_id: str, limit: int = 4):
+    """Get similar items to the given item"""
+    items = await get_similar_items(db, item_id, limit)
+    return items
+
+@api_router.get("/recommendations/frequently-bought-together/{item_id}")
+async def get_bought_together_recommendations(item_id: str, limit: int = 3):
+    """Get items frequently bought together with given item"""
+    items = await get_frequently_bought_together(db, item_id, limit)
+    return items
+
+@api_router.get("/recommendations/reorder")
+async def get_reorder_recommendations(request: Request, limit: int = 6):
+    """Get items user has ordered before"""
+    user = await get_current_user(request)
+    items = await get_reorder_suggestions(db, user["_id"], limit)
+    return items
 
 # ==================== Driver Routes ====================
 @api_router.get("/drivers")

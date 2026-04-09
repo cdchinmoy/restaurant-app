@@ -42,7 +42,43 @@ sio = socketio.AsyncServer(
 )
 
 # Create FastAPI app
-fastapi_app = FastAPI()
+fastapi_app = FastAPI(
+    title="QuickBites Food Delivery API",
+    description="""
+    ## QuickBites - Food Delivery Platform API
+    
+    A comprehensive food delivery platform with real-time order tracking, GPS live delivery tracking, 
+    admin dashboard, and Stripe payment integration.
+    
+    ### Features:
+    * **Authentication** - JWT-based secure authentication
+    * **Restaurant Management** - Browse and search restaurants
+    * **Order Management** - Create, track, and manage orders
+    * **Real-time Updates** - WebSocket-powered live tracking
+    * **Payment Integration** - Stripe checkout and webhooks
+    * **Recommendations** - AI-powered food suggestions
+    * **Admin Dashboard** - Complete platform management
+    * **GPS Tracking** - Live driver location tracking
+    
+    ### Authentication:
+    Most endpoints require authentication. Login to receive JWT tokens stored in httpOnly cookies.
+    
+    **Test Accounts:**
+    - Admin: `admin@fooddelivery.com` / `admin123`
+    - User: `user@test.com` / `user123`
+    """,
+    version="1.0.0",
+    contact={
+        "name": "QuickBites Support",
+        "email": "support@quickbites.com",
+    },
+    license_info={
+        "name": "Proprietary",
+    },
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
 api_router = APIRouter(prefix="/api")
 
 JWT_ALGORITHM = "HS256"
